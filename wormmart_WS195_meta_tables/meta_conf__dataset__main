@@ -1,0 +1,10 @@
+18	wormbase_anatomy_term	Anatomy Term	\N	TableSet	1	\N	2008-11-05 11:48:07
+14	wormbase_dna	DNA	\N	GenomicSequence	0	\N	2008-11-05 11:48:18
+19	wormbase_expr_pattern	Expression Pattern	\N	TableSet	1	\N	2008-11-05 11:48:24
+21	wormbase_gene	Gene	\N	TableSet	1	\N	2008-11-14 13:55:48
+24	wormbase_go_term	GO Term	\N	TableSet	1	\N	2008-11-05 11:48:49
+20	wormbase_paper	Paper	\N	TableSet	1	\N	2008-11-05 11:48:57
+22	wormbase_phenotype	Phenotype	\N	TableSet	1	\N	2008-11-10 13:37:48
+23	wormbase_rnai	RNAi	\N	TableSet	1	\N	2008-11-05 11:49:17
+17	wormbase_variation	Variation	\N	TableSet	1	\N	2008-11-12 15:13:43
+25	wormbase_phenotype_pointer	wormbase_phenotype_pointer		TableSet	0		2008-11-10 13:07:26
