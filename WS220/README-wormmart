@@ -1,0 +1,265 @@
+======================================================================
+Building the WormBase BioMart Database
+======================================================================
+
+This document provides information on how to build the WormBase
+BioMart database (WormMart).
+
+----------------------------------------------------------------------
+1. Software
+----------------------------------------------------------------------
+
+1a. Install the ACeDB Software
+
+The ACeDB software should be installed as detailed here;
+
+  http://search.cpan.org/src/LDS/AcePerl-1.91/docs/ACEDB.HOWTO
+
+Ensure that the saceserver binary is found in your path;
+
+  $ which saceserver
+
+1b. Install the Perl client code
+
+Go to a convenient directory to install the perl code
+
+  $ cd $HOME/biomart
+
+Get the perl client code from Ensembl's CVS
+
+  $ cvs -d :pserver:cvsuser@cvsro.sanger.ac.uk:/cvsroot/biomart login
+  [pass CVSUSER]
+
+  $ cvs -d :pserver:cvsuser@cvsro.sanger.ac.uk:/cvsroot/biomart co \
+  mart-build
+
+
+----------------------------------------------------------------------
+1.1 Environment
+----------------------------------------------------------------------
+
+Edit the environment file to reflect your system settings. You may
+need to refer back to this file as you follow the instructions below
+
+  $ cd $HOME/biomart/mart-build/scripts/wormbase-mart
+  $ <editor> wormmartrc
+  $ source wormmartrc
+
+
+----------------------------------------------------------------------
+2. Databases
+----------------------------------------------------------------------
+
+2.a Install latest WormBase ACeDB database
+
+If you already have access to the latest WormBase database (e.g. if
+you are working on cbi4 at sanger, and can read $ACE_DBDIR) you can skip
+ahead to step 2b.
+
+  $ ls -ld $ACE_DBDIR/WS${WB_RELEASE}
+
+Get the source ACe database from sanger's FTP stite;
+
+  $ cd $ACE_DBDIR
+  $ wget -r -nH --cut-dirs=2 \
+    "ftp://ftp.sanger.ac.uk/pub/wormbase/WS${WB_RELEASE}
+  $ cd WS${WB_RELEASE}
+  $ ./INSTALL
+
+2.b Start the Ace server 
+
+The server is started by calling the saceserver binary as follows ;
+
+  $ bsub -q normal -M 7900000 -Ip -J wormmart.ace.WS${WB_RELEASE} \
+    "saceserver $ACE_DBDIR/WS${WB_RELEASE} 23100 600000:600000:100000"
+
+Take a note of the host that this interactive job gets started on; you
+will need this later.
+
+2.c Create an empty target WormMart database
+
+  $ echo "Creating new database $MART_DBNAME"
+  $ mysql_worm -e "create database $MART_DBNAME"
+
+----------------------------------------------------------------------
+3. Running the Build
+----------------------------------------------------------------------
+
+The following (for running launch_wormmart_build.sh) assumes that you
+are on the Sanger cluster, and have access to the LSF queue called
+'long' that suppors jobs up to 8G in size. If not, it is farly simple
+to change the ./launch_wormmart_build.sh script to run the jobs on the
+local host.
+
+Assuming that the mart-build code was installed into $HOME/biomart in
+stage 1b;
+
+  $ cd $HOME/biomart/mart-build/scripts/wormbase-mart
+  $ mkdir -p ./logs
+
+Check the settings at the start of the wormmart_build script. You will
+need to change the value of ACE_HOST, depending on the host on which
+ the ace server was started.
+
+  $ <editor> launch_wormmart_build.sh
+
+And start the process
+
+  $ ./launch_wormmart_build.sh
+
+
+
+----------------------------------------------------------------------
+4. QC
+----------------------------------------------------------------------
+
+Is there anything in the logs that suggests a failure?
+The logs/*.err files should all end in;
+
+[INFO] Completed VariationLoader
+[INFO] Completed ace2mart
+
+Check this with, eg.;
+
+  $ tail -n2 ./logs/*.err
+
+
+----------------------------------------------------------------------
+5. Database Copy
+----------------------------------------------------------------------
+
+To copy, for instance, the database from Sanger (where it is built) to
+CSHL (where it is deployed), the followimng procedure could be
+followed;
+
+  $ set MART_HOST=hostname.of.mysql.server
+  $ ssh $MART_HOST #Dumping tab delimited files so must be on same machine
+  $ set MART_DBNAME=wormmart_192
+  $ cd {$HOME}/data/mysql
+  $ mkdir $MART_DBNAME
+  $ chmod 777 $MART_DBNAME #So that the mysql user can write to the dir
+  $ time mysqldump -h 127.0.0.1 -T $MART_DBNAME $MART_DBNAME
+  (~ 120 mins)
+  $ tar -zcvf ${MART_DBNAME}.tgz $MART_DBNAME
+  (~ 10 mins)
+  $ set MART_REMOTE='formaggio.cshl.edu'
+  $ scp ${MART_DBNAME}.tgz ${USER}@${MART_REMOTE}:~/
+  (~ 20 mins)
+  $ exit # Leave the remote host
+  $ ssh ${USER}@${MART_REMOTE}
+  $ screen # Do this under screen for safety.
+           # Create a new shell if already under screen
+  $ set MART_DBNAME=wormmart_194
+  # check that there is enough free space. At least 10G
+  $ df -h /usr/local/mysql/data
+  $ tar -zxvf ${MART_DBNAME}.tgz
+  (~15 mins) 
+  $ cd $MART_DBNAME
+  $ mysql -e "create database $MART_DBNAME"
+  $ cat *.sql | mysql $MART_DBNAME
+  $ mysqlimport --local $MART_DBNAME $PWD/*.txt 
+  (~ 20 mins)
+
+
+----------------------------------------------------------------------
+6. Database Configuration 
+----------------------------------------------------------------------
+
+This is where we add meta tables to the WormMart database. We use the
+MartEditor Jave GUI tool that is supplied by the BioMart project. 
+
+
+6a. Obtain and build the MartEditor code
+
+  $ cd /path/to/src
+  $ cvs -d :pserver:cvsuser@cvsro.sanger.ac.uk:/cvsroot/biomart \
+    login # pass:CVSROOT
+  $ cvs -d :pserver:cvsuser@cvsro.sanger.ac.uk:/cvsroot/biomart \
+    checkout -r release-0_7 martj
+  $ cd martj
+  $ ant jar # assumes apache-ant installed
+
+
+6b. Copy the WormMart config from old to new database
+
+Open MartEditor (Java app);
+
+  $ cd /path/to/src/martj
+  $ bin/marteditor &
+
+Connect to the previous WormMart database;
+
+  - Select "File" -> "Database Connection"
+  - Enter the database connection settings in the dialog box;
+    - Display Name: my_wormmart_db
+    - Database Type: mysql
+    - Database Driver: mysql
+    - Host: localhost (I use ssh tunneling to contact the DB...)
+    - Port: 3336      (...on the following port)
+    - Database: wormmart_191
+    - Schema: wormmart_191
+    - Database User: mart_admin
+    - Password: secret
+  the database you are connected to will display in the window's title bar.
+
+And copy the previous config to the new DB;
+
+  - Select "File"->"Move All", 
+  - Agree to the 'terms' (there is no config in the new DB to worry about),
+  ...there may be a short pause...
+  - When the 'Move to this database:' dialog pops up, change;
+    - Database: wormmart_191 to
+    - Database: wormmart_121
+    - Do the same for 'Schema:'
+    - Click 'OK'.
+  ...there will now be a long pause...
+
+The configuration is now moved to the new database.
+
+
+6c. Updating the configuration for the new DB
+  TODO: List all filters that need updating.
+
+
+----------------------------------------------------------------------
+7. Deploying MartView
+----------------------------------------------------------------------
+
+7a. Connect to the designated WormMart machine. 
+
+7b. Checkout the Latest BioMart and wormbase code, or update the
+    existing code;
+
+  $ cvs -d :pserver:cvsuser@cvsro.sanger.ac.uk:/cvsroot/biomart login
+  [pass CVSUSER]
+
+  To update;
+  $ cd /usr/local/biomart-perl; cvs -q up -dP ./
+  $ cd /usr/local/wormbase; cvs -q up -dP ./
+
+  To checkout;
+  $ cd /usr/local
+  $ cvs -d :pserver:cvsuser@cvsro.sanger.ac.uk:/cvsroot/biomart \
+  co -r release-0_7 biomart-perl
+  $ cvs -d formaggio.cshl.org:/usr/local/cvs_repository \
+  co wormbase
+
+7c. Copy-in the WormBase-specific files from the wormbase project into the 
+    biomart-perl project
+
+  $ cd /usr/local/wormbase/conf.wormmart
+  $ find . -type d ! -name CVS -exec \
+    ls /usr/local/biomart-perl/{} \;
+
+Create the tmp directory;
+
+  $ mkdir /usr/local/biomart-perl/tmp
+  $ chmod 777 /usr/local/biomart-perl/tmp
+
+
+
+
+
+
+
+
